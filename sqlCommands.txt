@@ -1,0 +1,213 @@
+/*
+drop table fines;
+drop table book_loans;
+create table book_loans
+(Loan_id int primary key not null auto_increment unique,
+Isbn13 char(13) not null,
+Card_id char(8) not null,
+Date_out Date not null,
+Date_in Date,
+Due_date Date not null
+);
+create table fines
+(Loan_id int primary key not null auto_increment unique,
+Fine_amt decimal(10,2) not null,
+paid bool not null,
+foreign key(Loan_id) references book_loans(Loan_id) on update cascade on delete cascade);
+*/
+
+/*
+drop table if exists authors;
+CREATE TABLE IF NOT EXISTS authors
+(author_id INT NOT NULL PRIMARY KEY AUTO_INCREMENT,
+name VARCHAR(100) NOT NULL
+);
+
+DROP TABLE if exists book_authors;
+CREATE TABLE IF NOT EXISTS book_authors
+(author_id INT NOT NULL AUTO_INCREMENT,
+isbn13 CHAR(13) NOT NULL,
+FOREIGN KEY(isbn13) REFERENCES book(isbn13) ON UPDATE CASCADE ON DELETE CASCADE,
+FOREIGN KEY(author_id) REFERENCES authors(Author_id) ON UPDATE CASCADE ON DELETE CASCADE
+);
+*/
+
+#start functions
+/*
+DELIMITER $$
+DROP PROCEDURE IF EXISTS split_author;
+CREATE PROCEDURE `split_author`(_list LONGTEXT, _isbn char(13))
+BEGIN
+
+DECLARE _next TEXT DEFAULT NULL;
+DECLARE _nextlen INT DEFAULT NULL;
+DECLARE _value TEXT DEFAULT NULL;
+
+iterator:
+LOOP
+  -- exit the loop if the list seems empty or was null;
+  -- this extra caution is necessary to avoid an endless loop in the proc.
+  IF CHAR_LENGTH(TRIM(_list)) = 0 OR _list IS NULL THEN
+    LEAVE iterator;
+  END IF;
+ 
+  -- capture the next value from the list
+  SET _next = SUBSTRING_INDEX(_list,',',1);
+
+  -- save the length of the captured value; we will need to remove this
+  -- many characters + 1 from the beginning of the string 
+  -- before the next iteration
+  SET _nextlen = CHAR_LENGTH(_next);
+
+  -- trim the value of leading and trailing spaces, in case of sloppy CSV strings
+  SET _value = TRIM(_next);
+
+  -- insert the extracted value into the target table
+  INSERT INTO authors (Name) VALUES (_value);
+  insert into book_authors(Isbn13) values (_isbn);
+
+  -- rewrite the original string using the `INSERT()` string function,
+  -- args are original string, start position, how many characters to remove, 
+  -- and what to "insert" in their place (in this case, we "insert"
+  -- an empty string, which removes _nextlen + 1 characters)
+  SET _list = INSERT(_list,1,_nextlen + 1,'');
+END LOOP;
+
+END $$
+
+DELIMITER ;
+
+
+DROP PROCEDURE IF EXISTS ROWPERROW;
+DELIMITER ;;
+
+CREATE PROCEDURE ROWPERROW()
+BEGIN
+DECLARE n INT DEFAULT 0;
+DECLARE i INT DEFAULT 0;
+SELECT COUNT(*) FROM temp INTO n;
+SET i=0;
+WHILE i<n DO 
+  call split_author((select nam from temp where temp.id=i+1), (select isbn13 from temp where temp.id=i+1));
+  SET i = i + 1;
+END WHILE;
+End;
+;;
+
+DELIMITER ;
+*/
+#end functions
+
+#call ROWPERROW();
+/*
+LOAD DATA INFILE 'C:/ProgramData/MySQL/MySQL Server 8.0/Uploads/borrowers.csv' 
+INTO TABLE library.borrower 
+FIELDS TERMINATED BY ','
+LINES TERMINATED BY '\n'
+IGNORE 1 ROWS
+(@Card_id,@Ssn,@fn,@ln,@dummy,@street,@cy,@st,@Phone)
+SET library.borrower.Bname = concat(@fn, " " , @ln),
+library.borrower.Card_id = substring(@Card_id,3),
+library.borrower.Phone = @Phone,
+library.borrower.Ssn = @Ssn,
+library.borrower.Street = @street,
+borrower.City = @cy,
+borrower.State = @st;
+*/
+##############################################################################################
+/*
+LOAD DATA INFILE 'C:/ProgramData/MySQL/MySQL Server 8.0/Uploads/books.csv' 
+ignore INTO TABLE authors 
+FIELDS TERMINATED BY '\t'
+LINES TERMINATED BY '\n'
+IGNORE 1 ROWS
+(@dummy1,@isbn13,@title,@author,@dummy2,@dummy3,@dummy4)
+set authors.Name = @author;
+*/
+
+#call ROWPERROW();
+#delete from authors where Name like '%,%';
+#select * from authors order by Author_id asc;
+#select count(*) from authors where Name like '%,%';
+#select count(*) from authors;
+##############################################################################################
+/*
+LOAD DATA INFILE 'C:/ProgramData/MySQL/MySQL Server 8.0/Uploads/books.csv' 
+ignore INTO TABLE book 
+FIELDS TERMINATED BY '\t'
+LINES TERMINATED BY '\n'
+IGNORE 1 ROWS
+(@dummy1,@isbn13,@title,@author,@dummy2,@dummy3,@dummy4)
+SET book.Isbn13 = @isbn13,
+book.Title = @title;
+*/
+##############################################################################################
+
+/*
+drop table if exists temp;
+create table temp
+(
+id int primary key auto_increment,
+isbn13 char(13),
+nam varchar(200),
+title varchar(200));
+LOAD DATA INFILE 'C:/ProgramData/MySQL/MySQL Server 8.0/Uploads/books.csv' 
+INTO TABLE temp
+FIELDS TERMINATED BY '\t'
+LINES TERMINATED BY '\n'
+IGNORE 1 ROWS
+(@dummy1,@isbn13,@title,@author,@dummy2,@dummy3,@dummy4)
+SET temp.isbn13 = @isbn13,
+temp.nam = @author,
+temp.title = @title;
+
+*/
+/*
+select * from temp order by id asc limit 10;
+call ROWPERROW();
+drop table temp;
+#book_authors.Author_id = 349855;#(select authors.Author_id from authors where authors.Name = @author);
+*/
+##########################################
+#using temp table to try
+
+/*
+LOAD DATA INFILE 'C:/ProgramData/MySQL/MySQL Server 8.0/Uploads/books.csv' 
+ignore INTO TABLE book_authors 
+FIELDS TERMINATED BY '\t'
+LINES TERMINATED BY '\n'
+IGNORE 1 ROWS
+(@isbn10,@isbn13,@title,@author,@cover,@publisher,@pages)
+SET book_authors.isbn13 = @isbn13;
+
+select * from book_authors;
+*/
+
+/*
+drop temporary table temp;
+create temporary table temp(
+isbn char(13) primary key,
+aut varchar(100),
+title varchar(200)
+);
+#show index from temp;
+DROP INDEX `PRIMARY` ON temp;
+
+LOAD DATA INFILE 'C:/ProgramData/MySQL/MySQL Server 8.0/Uploads/books.csv' 
+INTO TABLE temp
+FIELDS TERMINATED BY '\t'
+LINES TERMINATED BY '\n'
+IGNORE 1 ROWS
+(@dummy1,@isbn,@title,@author,@dummy2,@dummy3,@dummy4);
+
+insert into book_authors (Author_id)
+values
+((select authors.Author_id from authors where authors.Name = @author)); 
+*/
+
+/*
+(select book.Isbn13 from book where book.Isbn13 = @isbn))
+on duplicate key
+update book_authors.Isbn13 = concat(book_authors.Isbn13, ',',@isbn);
+#drop temporary table temp;
+*/
